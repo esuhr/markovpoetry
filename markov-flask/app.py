@@ -2,36 +2,39 @@ from flask import request, jsonify
 from flask_cors import cross_origin
 from models import Poem, poems_schema
 from config import app
+from helpers import MarkovModel
+
+model = None
 
 @app.route('/')
 def index():
     output = []
     return output
 
-@app.route('/poems', methods=['GET'])
+@app.route('/init', methods=['POST'])
 @cross_origin()
-def get_poems():
-    # get poems based on author and a date range
-    authors = request.args.get('authors')
-    authors = authors.split(',') if authors else None
+def initializeModel():
+    global model
+    poems = Poem.query.with_entities(Poem.poem_clean).all()
+    poems = [poem[0] for poem in poems]
+    model = MarkovModel(poems)
+    return jsonify({'success': True, 'message': 'Model initialized'})
 
-    dates = request.args.get('dates')
-    dates = dates.split(',') if dates else None
-    dates = [int(date) for date in dates] if dates else None
-    start = min(dates) if dates else None
-    end = max(dates) if dates else None
+@app.route('/generate', methods=['POST'])
+@cross_origin()
+def generateText():
+    global model
+    if not model:
+        return jsonify({'success': False, 'message': 'Model not initialized'})
+    
+    start_word = request.args.get('start_word', default=None)
+    num_words = request.args.get('num_words', default=20, type=int)
 
-    if not authors and not dates:
-        poems = Poem.query.with_entities(Poem.poem_clean, Poem.author, Poem.date).all()
-    elif not authors:
-        poems = Poem.query.filter(Poem.date >= start, Poem.date <= end).with_entities(Poem.poem_clean, Poem.author, Poem.date).all()
-    elif not dates:
-        poems = Poem.query.filter(Poem.author.in_(authors)).with_entities(Poem.poem_clean, Poem.author, Poem.date).all()
-    else:
-        poems = Poem.query.filter(Poem.author.in_(authors), Poem.date >= start, Poem.date <= end).with_entities(Poem.poem_clean, Poem.author, Poem.date).all()
-
-    result = poems_schema.dump(poems)
-    return jsonify(result)
+    if not start_word:
+        return jsonify({'success': False, 'message': 'No start word provided'})
+    
+    words = model.generate_text(start_word, num_words)
+    return jsonify({'success': True, 'message': words})
 
 @app.route('/authors', methods=['GET'])
 def get_authors():
@@ -39,9 +42,9 @@ def get_authors():
     author_list = [author[0] for author in authors]
     return jsonify(author_list)
 
-@app.route('/dates', methods=['GET'])
+@app.route('/corpus/date/<start_date>/<end_date>', methods=['GET'])
 # get min and max dates
-def get_dates():
+def get_dates(start_date, end_date):
     dates = Poem.query.with_entities(Poem.date)
     date_list = [date[0] for date in dates if date[0] is not None]
     dateminmax = [min(date_list), max(date_list)]

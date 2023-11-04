@@ -1,47 +1,38 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { words, transitions, loadPoems } from '$lib/poems.js'
-    import { shortGenerator } from '$lib/helpers.js'
+    // import { words, transitions, loadPoems } from '$lib/poems.js'
+    // import { shortGenerator } from '$lib/helpers.js'
 
     let textinput;
-    let corpuswords, corpustransition;
+    // let corpuswords, corpustransition;
     let placeholder = 'block'
-    let startword;
+    // let startword;
     let generated;
 
 
-    onMount(() => {
-        loadPoems();
-    })
-
-    onDestroy(() => {
-        unsubwords();
-        unsubtrans();
-    })
-
-
-    const unsubwords = words.subscribe(value => {
-        corpuswords = value;
-    })
-
-    const unsubtrans = transitions.subscribe(value => {
-        corpustransition = value;
+    onMount( async() => {
+        const url = 'http://127.0.0.1:5000/init'
+        const options = {method: 'POST', headers: {'Content-Type': 'application/json',}, mode: 'cors'}
+        const res = await fetch(url, options);
+        console.log(res.message)
     })
 
     $: startword = '';
-
-    $: if (corpuswords && corpustransition && startword) {
-        generated = shortGenerator(corpuswords, corpustransition, startword);
-        console.log(generated)
-    }
 
     const togglePlaceholder = () => {
         placeholder = 'none';
     }
 
-    const getText = (e) => {
+    const getText = async (e) => {
         if (e.key === ' ') {
-            startword = textinput.innerHTML.replace('\n', ' ').toLowerCase().trim().split(' ').pop();
+            startword = textinput.innerText.split(' ').slice(-1)[0];
+            console.log(startword)
+
+            const url = `http://127.0.0.1:5000/generate?start_word=${startword}&num_words=20`
+            const options = {method: 'POST', headers: {'Content-Type': 'application/json',}, mode: 'cors'}
+            const res = await fetch(url, options);
+            const json = await res.json();
+            generated = json.message;
         }
     }
 
